@@ -2,10 +2,14 @@ import axios from 'axios'
 import { auth } from '../config/firebase'
 import { signOut } from 'firebase/auth'
 
-// Standardize baseURL: append /api if missing from VITE_API_URL
+// ── Determine API base URL ────────────────────────────────────
+// Production (Vercel): VITE_API_URL is not set → use relative /api
+//   Frontend and backend are on the same domain, Vercel routes /api/* to backend.
+// Local Dev: falls back to http://localhost:5000/api
 const getBaseURL = () => {
-  const url = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-  return url.endsWith('/api') ? url : `${url}/api`
+  const url = import.meta.env.VITE_API_URL
+  if (!url) return '/api'                                   // Vercel production (same domain)
+  return url.endsWith('/api') ? url : `${url}/api`          // Explicit URL from .env
 }
 
 const API = axios.create({
@@ -25,11 +29,15 @@ API.interceptors.request.use(
         const token = await auth.currentUser.getIdToken(true)
         config.headers.Authorization = `Bearer ${token}`
         localStorage.setItem('authToken', token)
+        console.debug(`[API] ✅ Token attached for ${config.method?.toUpperCase()} ${config.url}`)
       } else {
         // Fallback to stored token if auth.currentUser is not yet ready
         const storedToken = localStorage.getItem('authToken')
         if (storedToken) {
           config.headers.Authorization = `Bearer ${storedToken}`
+          console.debug(`[API] ⚡ Using stored token for ${config.method?.toUpperCase()} ${config.url}`)
+        } else {
+          console.warn(`[API] ⚠️ No token available for ${config.method?.toUpperCase()} ${config.url}`)
         }
       }
     } catch (error) {

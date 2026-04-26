@@ -7,6 +7,12 @@ import { UserRoles } from '../models/User.js';
  * Uses Firebase Admin SDK - no JWT library involved
  */
 export const authenticate = async (req, res, next) => {
+  // ── Allow OPTIONS preflight to pass through without auth ──
+  // Browsers send preflight before every credentialed cross-origin request.
+  // If this isn't here, the preflight gets a 401 before CORS headers are set,
+  // which appears as net::ERR_FAILED in DevTools.
+  if (req.method === 'OPTIONS') return next();
+
   try {
     const authHeader = req.headers.authorization;
 

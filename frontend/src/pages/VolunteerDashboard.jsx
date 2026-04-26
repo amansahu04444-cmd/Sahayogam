@@ -16,6 +16,7 @@ import TaskDetailsModal from '../components/TaskDetailsModal'
 import TaskInvitationsModal from '../components/TaskInvitationsModal'
 import NotificationBell from '../components/NotificationBell'
 import { useVolunteer } from '../context/VolunteerContext'
+import { useAuth } from '../context/AuthContext'
 import { taskAPI } from '../services/api'
 import { auth } from '../config/firebase'
 import { safeLower } from '../utils/stringUtils'
@@ -63,6 +64,7 @@ const extractState = (address) => {
 }
 
 const VolunteerDashboard = () => {
+  const { isAuthenticated, loading: authLoading } = useAuth()
   const [availableTasks, setAvailableTasks] = useState([])
   const [isLoadingTasks, setIsLoadingTasks] = useState(true)
   const { myTasks, addTask } = useVolunteer()
@@ -98,10 +100,12 @@ const VolunteerDashboard = () => {
     )
   })
 
-  // ── Fetch available (pending) tasks on mount ─────────────────
+  // ── Fetch available (pending) tasks — waits for auth to be ready ─────────────
   useEffect(() => {
+    // Guard: do NOT fetch until Firebase auth is confirmed
+    if (authLoading || !isAuthenticated) return
     fetchAvailableTasks()
-  }, [])
+  }, [isAuthenticated, authLoading])
 
   const fetchAvailableTasks = async () => {
     setIsLoadingTasks(true)

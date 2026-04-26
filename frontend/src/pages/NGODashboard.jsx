@@ -13,12 +13,14 @@ import NotificationBell from '../components/NotificationBell'
 import LocationPicker from '../components/LocationPicker'
 import AssignVolunteerModal from '../components/AssignVolunteerModal'
 import { taskAPI } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 import { db } from '../config/firebase'
 import { collection, query, onSnapshot, orderBy } from 'firebase/firestore'
 
 import { TASK_CATEGORIES } from '../constants/categories'
 
 const NGODashboard = () => {
+  const { isAuthenticated, loading: authLoading } = useAuth()
   const [tasks, setTasks] = useState([])
   const [stats, setStats] = useState({ total: 0, highPriority: 0, completed: 0, activeVolunteers: 0 })
   const [showForm, setShowForm] = useState(false)
@@ -39,8 +41,11 @@ const NGODashboard = () => {
   })
   const [errors, setErrors] = useState({})
 
-  // ── Real-time listener for tasks ───────────────
+  // ── Real-time listener for tasks — waits for auth to be ready ───────────────
   useEffect(() => {
+    // Do NOT fetch until Firebase auth is confirmed
+    if (authLoading || !isAuthenticated) return
+
     fetchStats()
     
     const q = query(collection(db, 'tasks'), orderBy('createdAt', 'desc'))
@@ -62,7 +67,7 @@ const NGODashboard = () => {
       unsubscribe()
       clearInterval(statsInterval)
     }
-  }, [])
+  }, [isAuthenticated, authLoading])
 
   const fetchStats = async () => {
     try {
