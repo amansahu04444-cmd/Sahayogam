@@ -17,17 +17,14 @@ const missingVars = requiredEnvVars.filter(
 );
 
 if (missingVars.length > 0) {
-  const errorMsg = `
-    ❌ FIREBASE CONFIGURATION ERROR
+  console.error(`
+    ⚠️  FIREBASE CONFIGURATION WARNING
     Missing environment variables: ${missingVars.join(', ')}
     
-    Fix: Create a .env file in the frontend/ directory with these variables:
-    ${requiredEnvVars.map((v) => `${v}=your_value_here`).join('\n')}
-    
-    Then restart your dev server.
-  `;
-  console.error(errorMsg);
-  throw new Error(`Firebase config error: Missing variables [${missingVars.join(', ')}]`);
+    The app will continue to load, but Firebase services will fail.
+    Check your .env file or Vercel environment variables.
+  `);
+  // NO THROW: Allow app to boot to show error boundaries or fallback UI
 }
 
 const firebaseConfig = {

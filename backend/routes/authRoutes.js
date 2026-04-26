@@ -14,43 +14,56 @@ router.post('/sync', async (req, res) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "No token provided" });
+      return res.status(401).json({ success: false, message: "No token provided" });
     }
 
     const token = authHeader.split(" ")[1];
-    const decoded = await admin.auth().verifyIdToken(token);
-    const userRef = db.collection("users").doc(decoded.uid);
+    let decoded;
+    
+    try {
+      decoded = await admin.auth().verifyIdToken(token);
+    } catch (tokenError) {
+      console.error("[Auth Sync] Token verification failed:", tokenError.message);
+      return res.status(401).json({ success: false, message: "Invalid token" });
+    }
 
-    // Check if user already exists
+    const userRef = db.collection("users").doc(decoded.uid);
     const existingDoc = await userRef.get();
 
+    // If user exists and no new role provided, it's a simple login sync
     if (existingDoc.exists && !req.body.role) {
-      // Login case: user already synced, just return existing data
       return res.status(200).json({
         success: true,
-        message: "User fetched successfully",
+        message: "User data retrieved successfully",
         data: { id: existingDoc.id, ...existingDoc.data() },
       });
     }
 
-    // Signup case: name and role are required
-    if (!req.body.name || !req.body.role) {
-      return res.status(400).json({ message: "Missing name or role" });
-    }
+    // For new users or role updates, ensure required fields exist
+    const { name, role, skills, location } = req.body;
 
-    if (!["ngo", "volunteer"].includes(req.body.role)) {
-      return res.status(400).json({ message: "Invalid role" });
+    if (!existingDoc.exists && (!name || !role)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Full profile (name and role) required for initial sync" 
+      });
     }
 
     const userData = {
       uid: decoded.uid,
-      name: req.body.name,
       email: decoded.email,
-      role: req.body.role,
-      skills: req.body.skills || [],
-      location: req.body.location || {},
       updatedAt: new Date(),
     };
+
+    if (name) userData.name = name;
+    if (role) {
+      if (!["ngo", "volunteer", "admin"].includes(role)) {
+        return res.status(400).json({ success: false, message: "Invalid role" });
+      }
+      userData.role = role;
+    }
+    if (skills) userData.skills = skills;
+    if (location) userData.location = location;
 
     if (!existingDoc.exists) {
       userData.createdAt = new Date();
@@ -58,17 +71,16 @@ router.post('/sync', async (req, res) => {
 
     await userRef.set(userData, { merge: true });
 
-    const userDoc = await userRef.get();
-
+    const finalDoc = await userRef.get();
     res.status(200).json({
       success: true,
-      message: "User synced successfully",
-      data: { id: userDoc.id, ...userDoc.data() },
+      message: existingDoc.exists ? "User profile updated" : "User created and synced",
+      data: { id: finalDoc.id, ...finalDoc.data() },
     });
 
   } catch (error) {
-    console.error("Sync Error:", error.message);
-    res.status(400).json({ message: error.message });
+    console.error("[Auth Sync] Fatal error:", error);
+    res.status(500).json({ success: false, message: "Server error during synchronization" });
   }
 });
 

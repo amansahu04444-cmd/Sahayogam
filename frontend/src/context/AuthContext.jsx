@@ -12,70 +12,62 @@ export const AuthProvider = ({ children }) => {
 
   // ── Listen to Firebase Auth state changes ────────────────────
   useEffect(() => {
-    let timeoutId;
-
-    // Safety timeout: if Firebase auth takes too long, stop loading
-    timeoutId = setTimeout(() => {
-      if (loading) {
-        console.warn('[Auth] Firebase auth timed out after 5s — showing app without auth')
-        setLoading(false)
-      }
-    }, 5000)
+    let isMounted = true
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      clearTimeout(timeoutId)
+      if (!isMounted) return
 
       if (firebaseUser) {
         try {
-          // Ensure there is a fresh token available for backend requests
+          // 1. Force refresh token immediately to ensure we have a valid one
           const token = await firebaseUser.getIdToken(true)
           localStorage.setItem('authToken', token)
-        } catch (tokenError) {
-          console.warn('[Auth] Failed to refresh token on auth state change:', tokenError)
-          localStorage.removeItem('authToken')
-        }
-
-        // Firebase user is signed in — fetch profile from backend
-        try {
+          
+          // 2. Fetch profile ONLY after token is guaranteed to be set
           const res = await userAPI.getProfile()
           const freshUser = res.data.data
 
-          const userData = {
-            id: freshUser.id || freshUser.uid || firebaseUser.uid,
-            name: freshUser.name || firebaseUser.displayName || '',
-            email: freshUser.email || firebaseUser.email,
-            role: freshUser.role?.toLowerCase() || 'volunteer',
-            skills: freshUser.skills || [],
-            location: freshUser.location || {},
+          if (isMounted) {
+            setUser({
+              id: freshUser.id || firebaseUser.uid,
+              name: freshUser.name || firebaseUser.displayName || '',
+              email: freshUser.email || firebaseUser.email,
+              role: freshUser.role?.toLowerCase() || 'volunteer',
+              skills: freshUser.skills || [],
+              location: freshUser.location || {},
+            })
+            setIsAuthenticated(true)
           }
-
-          setUser(userData)
-          setIsAuthenticated(true)
-        } catch {
-          // Profile not yet synced or token issue —
-          // still mark as authenticated with basic info
-          setUser({
-            id: firebaseUser.uid,
-            name: firebaseUser.displayName || '',
-            email: firebaseUser.email,
-            role: 'volunteer',
-            skills: [],
-            location: {},
-          })
-          setIsAuthenticated(true)
+        } catch (error) {
+          console.error('[Auth] Profile fetch failed on auth change:', error.message)
+          
+          if (isMounted) {
+            // Fallback: Authenticated with Firebase but profile sync pending
+            setUser({
+              id: firebaseUser.uid,
+              name: firebaseUser.displayName || '',
+              email: firebaseUser.email,
+              role: 'volunteer',
+              skills: [],
+              location: {},
+            })
+            setIsAuthenticated(true)
+          }
         }
       } else {
         // No Firebase user — signed out
-        setUser(null)
-        setIsAuthenticated(false)
-        localStorage.removeItem('authToken')
+        if (isMounted) {
+          setUser(null)
+          setIsAuthenticated(false)
+          localStorage.removeItem('authToken')
+        }
       }
 
-      setLoading(false)
+      if (isMounted) setLoading(false)
     })
 
     return () => {
-      clearTimeout(timeoutId)
+      isMounted = false
       unsubscribe()
     }
   }, [])

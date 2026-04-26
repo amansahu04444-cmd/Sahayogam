@@ -2,39 +2,38 @@ import axios from 'axios'
 import { auth } from '../config/firebase'
 import { signOut } from 'firebase/auth'
 
+// Standardize baseURL: append /api if missing from VITE_API_URL
+const getBaseURL = () => {
+  const url = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+  return url.endsWith('/api') ? url : `${url}/api`
+}
+
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: getBaseURL(),
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
   },
 })
 
-const TOKEN_STORAGE_KEY = 'authToken'
-
-const getStoredToken = () => localStorage.getItem(TOKEN_STORAGE_KEY)
-const setStoredToken = (token) => token ? localStorage.setItem(TOKEN_STORAGE_KEY, token) : localStorage.removeItem(TOKEN_STORAGE_KEY)
-
-// ── Request Interceptor: attach Firebase ID token + cache-bust GETs ──
+// ── Request Interceptor: attach Fresh Firebase ID token ──
 API.interceptors.request.use(
   async (config) => {
     try {
-      let token = getStoredToken()
-
-      if (!token && auth.currentUser) {
-        token = await auth.currentUser.getIdToken()
-        setStoredToken(token)
-      }
-
-      if (token) {
+      // Force refresh token if user is signed in to avoid 401s on expired tokens
+      if (auth.currentUser) {
+        const token = await auth.currentUser.getIdToken(true)
         config.headers.Authorization = `Bearer ${token}`
+        localStorage.setItem('authToken', token)
+      } else {
+        // Fallback to stored token if auth.currentUser is not yet ready
+        const storedToken = localStorage.getItem('authToken')
+        if (storedToken) {
+          config.headers.Authorization = `Bearer ${storedToken}`
+        }
       }
     } catch (error) {
-      console.error('Error getting auth token for request:', error)
-      setStoredToken(null)
+      console.error('[API Interceptor] Failed to get fresh token:', error)
     }
 
     // Add cache-busting timestamp to GET requests
@@ -46,23 +45,27 @@ API.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// ── Response Interceptor: handle 401 ─────────────────────────
+// ── Response Interceptor: handle 401/Unauthorized ──
 API.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
-      setStoredToken(null)
-      try {
-        await signOut(auth)
-      } catch (signOutError) {
-        console.warn('Failed to sign out after 401:', signOutError)
-      }
+    const originalRequest = error.config
 
-      if (
-        !window.location.pathname.includes('/login') &&
-        !window.location.pathname.includes('/signup')
-      ) {
-        window.location.href = '/login'
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      console.warn('[API] 401 Unauthorized detected')
+      localStorage.removeItem('authToken')
+      
+      // If we're not on a public page, redirect to login
+      const publicPaths = ['/login', '/signup', '/']
+      const isPublicPath = publicPaths.some(path => window.location.pathname === path)
+
+      if (!isPublicPath) {
+        try {
+          await signOut(auth)
+        } catch (err) {
+          console.error('[API] Logout failed:', err)
+        }
+        window.location.href = '/login?expired=true'
       }
     }
     return Promise.reject(error)

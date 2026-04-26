@@ -11,18 +11,20 @@ export const authenticate = async (req, res, next) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.warn('[Auth] No Bearer token found in request headers');
       return res.status(401).json({
         success: false,
-        message: 'Access denied. No token provided.',
+        message: 'Unauthorized: No token provided.',
       });
     }
 
     const token = authHeader.split(' ')[1];
 
     if (!token) {
+      console.warn('[Auth] Token is empty');
       return res.status(401).json({
         success: false,
-        message: 'Access denied. No token provided.',
+        message: 'Unauthorized: Token is empty.',
       });
     }
 
@@ -31,9 +33,9 @@ export const authenticate = async (req, res, next) => {
       const decodedToken = await admin.auth().verifyIdToken(token);
       
       // Fetch user role from Firestore
-      let role = UserRoles.VOLUNTEER; // Default
-      
+      let role = UserRoles.VOLUNTEER;
       const userDoc = await db.collection('users').doc(decodedToken.uid).get();
+      
       if (userDoc.exists) {
         role = userDoc.data().role;
       }
@@ -45,17 +47,22 @@ export const authenticate = async (req, res, next) => {
       
       next();
     } catch (error) {
-      console.error('Firebase Auth Error:', error.message);
+      console.error('[Auth] Token verification failed:', error.message);
+      
+      const message = error.code === 'auth/id-token-expired' 
+        ? 'Token expired. Please log in again.' 
+        : 'Invalid token.';
+
       return res.status(401).json({
         success: false,
-        message: 'Invalid or expired token.',
+        message: message,
       });
     }
   } catch (error) {
-    console.error('Authentication error:', error);
+    console.error('[Auth] Internal middleware error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Authentication error.',
+      message: 'Authentication service error.',
     });
   }
 };
