@@ -3,13 +3,11 @@ import { auth } from '../config/firebase'
 import { signOut } from 'firebase/auth'
 
 // ── Determine API base URL ────────────────────────────────────
-// Production (Vercel): VITE_API_URL is not set → use relative /api
-//   Frontend and backend are on the same domain, Vercel routes /api/* to backend.
-// Local Dev: falls back to http://localhost:5000/api
+// Production (Vercel): VITE_API_URL = https://sahayogam.onrender.com  (set in Vercel dashboard)
+// Local Dev:           VITE_API_URL = http://localhost:5000            (set in frontend/.env)
 const getBaseURL = () => {
-  const url = import.meta.env.VITE_API_URL
-  if (!url) return '/api'                                   // Vercel production (same domain)
-  return url.endsWith('/api') ? url : `${url}/api`          // Explicit URL from .env
+  const url = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+  return url.endsWith('/api') ? url : `${url}/api`
 }
 
 const API = axios.create({

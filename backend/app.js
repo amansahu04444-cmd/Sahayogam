@@ -135,54 +135,50 @@ app.use(notFound);
 app.use(errorHandler);
 
 // ── Server Startup ──────────────────────────────────────────────
-// On Vercel (serverless), the app is exported and Vercel handles routing.
-// app.listen() must NOT be called in serverless — only run locally.
+// Backend runs on Render — always start the HTTP server.
 const DESIRED_PORT = parseInt(process.env.PORT, 10) || 5000;
 
-if (!process.env.VERCEL) {
-  function startServer(port, retries = 0) {
-    const MAX_RETRIES = 10;
+function startServer(port, retries = 0) {
+  const MAX_RETRIES = 10;
 
-    const server = app.listen(port, () => {
-      console.log(`✅ Server running on port ${port}`);
-      if (port !== DESIRED_PORT) {
-        console.log(`ℹ️  (Port ${DESIRED_PORT} was busy, using ${port} instead)`);
-      }
-      console.log("App initialized successfully");
-    });
+  const server = app.listen(port, () => {
+    console.log(`✅ Server running on port ${port}`);
+    if (port !== DESIRED_PORT) {
+      console.log(`ℹ️  (Port ${DESIRED_PORT} was busy, using ${port} instead)`);
+    }
+    console.log("App initialized successfully");
+  });
 
-    server.on('error', (error) => {
-      if (error.code === 'EADDRINUSE') {
-        if (retries < MAX_RETRIES) {
-          const nextPort = port + 1;
-          console.warn(`⚠️  Port ${port} is busy, trying ${nextPort}...`);
-          startServer(nextPort, retries + 1);
-        } else {
-          console.error(`❌ Could not find a free port after ${MAX_RETRIES} attempts.`);
-          process.exit(1);
-        }
+  server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      if (retries < MAX_RETRIES) {
+        const nextPort = port + 1;
+        console.warn(`⚠️  Port ${port} is busy, trying ${nextPort}...`);
+        startServer(nextPort, retries + 1);
       } else {
-        console.error('❌ Server error:', error);
+        console.error(`❌ Could not find a free port after ${MAX_RETRIES} attempts.`);
         process.exit(1);
       }
+    } else {
+      console.error('❌ Server error:', error);
+      process.exit(1);
+    }
+  });
+
+  // Graceful shutdown
+  const shutdown = () => {
+    console.log('\n🔄 Shutting down server gracefully...');
+    server.close(() => {
+      console.log('✅ Server closed. Port released.');
+      process.exit(0);
     });
+    setTimeout(() => process.exit(0), 3000);
+  };
 
-    // Graceful shutdown
-    const shutdown = () => {
-      console.log('\n🔄 Shutting down server gracefully...');
-      server.close(() => {
-        console.log('✅ Server closed. Port released.');
-        process.exit(0);
-      });
-      setTimeout(() => process.exit(0), 3000);
-    };
-
-    process.on('SIGTERM', shutdown);
-    process.on('SIGINT', shutdown);
-  }
-
-  startServer(DESIRED_PORT);
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
-// Export for Vercel serverless
+startServer(DESIRED_PORT);
+
 export default app;
