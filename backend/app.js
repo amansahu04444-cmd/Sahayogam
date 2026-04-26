@@ -46,13 +46,23 @@ if (!db) {
 const app = express();
 
 // Middleware
-app.use(cors({ 
-  origin: 'http://localhost:5173', 
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  credentials: true 
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://sahayogam.vercel.app"
+];
+
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS blocked"));
+    }
+  },
+  methods: ["GET","POST","PUT","PATCH","DELETE"],
+  credentials: true
 }));
 
-// Handle preflight requests for all routes
 app.options('*', cors());
 
 // Disable caching — prevents 304 Not Modified responses
