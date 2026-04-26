@@ -1,12 +1,11 @@
 import admin from "firebase-admin";
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const serviceAccount = JSON.parse(fs.readFileSync(path.join(__dirname, '../serviceAccountKey.json'), 'utf8'));
+const serviceAccount = {
+  type: "service_account",
+  project_id: process.env.project_id,
+  client_email: process.env.client_email,
+  private_key: process.env.private_key.replace(/\\n/g, "\n"),
+};
 
 if (!admin.apps.length) {
   admin.initializeApp({
