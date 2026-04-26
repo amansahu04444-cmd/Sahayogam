@@ -1,4 +1,4 @@
-🚀 Sahayogam
+```🚀 Sahayogam
 Smart AI-Powered Resource Allocation System for Social Impact
 
 📌 Overview
@@ -191,7 +191,7 @@ backend/
 │   ├── helpers.js
 
 
-🎨 Frontend Structure
+---🎨 Frontend Structure
 frontend/
 │── index.html
 │── package.json
@@ -272,7 +272,6 @@ frontend/
 │   ├── stringUtils.js
 
 
-
 🔐 Security
 Firebase Authentication
 JWT-based middleware
@@ -318,5 +317,5 @@ AI + rule-based hybrid system
 
 Pull requests are welcome.
 For major changes, please open an issue first.
-
+```
 
